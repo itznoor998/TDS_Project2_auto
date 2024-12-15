@@ -14,6 +14,9 @@
 from dotenv import load_dotenv
 import os
 import pandas as pd
+import matplotlib
+matplotlib.use('Agg')
+
 import matplotlib.pyplot as plt
 import seaborn as sns
 from scipy.stats import chi2_contingency, zscore
@@ -112,9 +115,15 @@ def general_statistics(data):
     stats_summary += f"Unique values across categorical features:\n{data[categorical_cols].nunique().to_string()}\n"
 
     # Correlation summary
-    stats_summary += "\nCorrelation Matrix:\n"
-    correlation_matrix = data.corr()
-    stats_summary += f"{correlation_matrix.to_string()}\n"
+    numerical_cols = data.select_dtypes(include='number').columns
+
+    numerical_data = data.loc[:,numerical_cols]
+    
+    stats_summary += "\nCorrelation Summary:\n"
+    for num_col1 in numerical_cols:
+        for num_col2 in numerical_cols:
+            if num_col1 != num_col2: # Checking for self-comparisons
+                stats_summary += f"- Correlation between {num_col1} and {num_col2}: {numerical_data[num_col1].corr(numerical_data[num_col2])}\n"
 
     # Detect multivariate outliers
     outliers_detected = perform_outlier_detection(data, numerical_cols)
@@ -275,13 +284,12 @@ def generate_story(data_analysis, df):
         "messages": [
             {
                 "role": "system",
-                "content": "You are a data analysis assistant that crafts narratives emphasizing key insights from analysis findings."
+                "content": "You are a data analysis assistant that crafts narratives emphasizing key insights from analysis findings and send it json format."
             },
             {
                 "role": "user",
-                "content": f"""Generate a concise, clear, and professional narrative story structured with clear insights, 
-                            key findings, logical subheadings, and highlighting trends. 
-                            The narrative should be easy to follow, engaging, and directly emphasize the key findings."""
+                "content": f"""Generate a narrative story with subheadings and should be in professional tone that emphasizes key insights from data analysis 
+                findings and send it in json format."""
             }
         ],
         "max_tokens": 400,  # Optimized token usage
@@ -299,10 +307,10 @@ def generate_story(data_analysis, df):
 
     # Handle response robustly
     try:
-        raw_response = response.json()
-        story_response = raw_response.get('choices', [{}])[0].get('message', {}).get('function_call', {}).get('arguments', {})
-        story = story_response.get('data_analysis', "No story generated.")
-    except (KeyError, json.JSONDecodeError) as e:
+        raw_story = response.json()['choices'][0]['message']['function_call']['arguments']
+        print(raw_story)
+        story = json.loads(raw_story)['data_analysis']
+    except Exception as e:
         print(f"Error parsing the response from LLM: {e}")
         sys.exit(1)
 
@@ -316,12 +324,12 @@ def generate_story(data_analysis, df):
             file.write(f"\nReport generated on {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n")
 
             # Embed visualizations into the README
-            file.write("## Visualizations\n")
+            file.write("# Visualizations\n")
             for image in images:
                 file.write(f"![{image}]({image})\n")
 
             # Write the story with improved logical structure
-            file.write("\n## Narrative Story\n")
+            file.write("\n# Narrative Story\n")
             file.write(f"{story}\n")
         
         print("Story and visualizations have been successfully generated. Check README.md for details.")
