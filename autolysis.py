@@ -2,12 +2,13 @@
 # requires-python = ">=3.11"
 # dependencies = [
 #   "python-dotenv",
-#   "pandas",
-#   "seaborn",
 #   "matplotlib",
-#   "scipy",
+#   "pandas",
+#   "numpy",
+#   "seaborn",
 #   "os",
 #   "sys",
+#   "warnings",
 #   "datetime",
 #   "requests",
 #   "json",
@@ -17,10 +18,11 @@
 from dotenv import load_dotenv
 import os
 import pandas as pd
+import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
-from scipy.stats import chi2_contingency, zscore
 import sys
+import warnings
 from datetime import datetime
 import requests
 import json
@@ -42,110 +44,46 @@ def load_data(file_path):
         # handle exceptions if any
         print(f"Error loading dataset: {e}")
         sys.exit(1)
- 
-
-
-def perform_chi_square_tests(data, categorical_cols):
-    """
-    Performs Chi-Square tests for categorical column pairs to assess independence.
     
-    Args:
-        data (DataFrame): Input DataFrame with categorical columns.
-        categorical_cols (Index): List of categorical columns.
-
-    Returns:
-        str: A string summarizing results of the Chi-Square statistical tests.
-    """
-    chi_square_results = []
-    for col1 in categorical_cols:
-        for col2 in categorical_cols:
-            if col1 != col2:
-                contingency_table = pd.crosstab(data[col1], data[col2])
-                chi2_stat, p_value, dof, expected = chi2_contingency(contingency_table)
-
-                # Record the test results
-                chi_square_results.append({
-                    "col1": col1,
-                    "col2": col2,
-                    "chi2_stat": chi2_stat,
-                    "p_value": p_value,
-                    "dof": dof
-                })
-    
-    # Format Chi-Square findings
-    result_str = "\nChi-Square Test Results:\n"
-    for result in chi_square_results:
-        result_str += (f"Chi2 Statistic between {result['col1']} and {result['col2']}: {result['chi2_stat']:.2f}, "
-                       f"p-value: {result['p_value']:.4f}\n")
-    
-    return result_str
-
-
-def perform_outlier_detection(data, numerical_cols):
-    """
-    Detect multivariate outliers using z-scores or IQR filtering.
-
-    Args:
-        data (DataFrame): Input numerical DataFrame.
-        numerical_cols (Index): List of numerical columns to analyze.
-
-    Returns:
-        dict: Outlier counts for each feature.
-    """
-    outliers = {}
-    for col in numerical_cols:
-        z_scores = zscore(data[col].dropna())
-        outlier_count = (abs(z_scores) > 3).sum()
-        outliers[col] = outlier_count
-    return outliers
-
 
 def general_statistics(data):
-    """Generate general statistics with advanced statistical insights."""
-    
-    # Select columns for analysis
+
+    """Generate general statistics and return as a string."""
+
     numerical_cols = data.select_dtypes(include='number').columns
     categorical_cols = data.select_dtypes(exclude='number').columns
 
-    # Base summary statistics
-    stats_summary = f"Dataset Overview:\n"
-    stats_summary += f"Shape: {data.shape[0]} rows, {data.shape[1]} columns\n"
-    stats_summary += f"Columns: {', '.join(data.columns)}\n"
-    stats_summary += f"Total missing values: {data.isna().sum().sum()}\n"
-    stats_summary += f"Unique values across categorical features:\n{data[categorical_cols].nunique().to_string()}\n"
+    numerical_data = data.loc[:,numerical_cols]
+    categorical_data = data.loc[:,categorical_cols]
 
-    # Correlation summary
-    stats_summary += "\nCorrelation Matrix:\n"
-    correlation_matrix = data.corr()
-    stats_summary += f"{correlation_matrix.to_string()}\n"
+    stats = f"Dataset Summary:\n"
+    stats += f"Shape: {data.shape[0]} rows, {data.shape[1]} columns\n"
+    stats += f"Columns: {', '.join(data.columns)}\n"
+    stats += f"Total no of NaN values in the dataset:{data.isna().sum().sum()}\n"
+    stats += f"Unique values in categorical columns:\n{categorical_data.nunique()}\n"
 
-    # Detect multivariate outliers
-    outliers_detected = perform_outlier_detection(data, numerical_cols)
-    stats_summary += "\nOutlier Detection (z-score > 3):\n"
-    for key, value in outliers_detected.items():
-        stats_summary += f"{key}: {value} outliers\n"
-    
-    # Perform Chi-square tests for categorical relationships
-    chi_square_summary = perform_chi_square_tests(data, categorical_cols)
-    
-    # Statistical visualization via heatmap or correlations
-    try:
-        # Plot heatmap for correlations
-        plt.figure(figsize=(10, 8))
-        sns.heatmap(data.corr(), annot=True, fmt=".2f", cmap="coolwarm")
-        plt.title("Correlation Heatmap")
-        plt.tight_layout()
-        plt.savefig("correlation_heatmap.png")
-        plt.close()
-        stats_summary += "\nCorrelation Heatmap Saved as 'correlation_heatmap.png'\n"
-    except Exception as e:
-        print(f"Correlation heatmap could not be plotted: {e}")
-    
-    # Final statistical insights
-    stats_summary += chi_square_summary
-    
-    return stats_summary
 
+    for col in categorical_cols:
+        top_values = data[col].value_counts().head(5).to_dict()
+        stats += f"Top five values in {col}:\n{top_values}\n"
+
+    stats += f"\nSummary Statistics:\n{data.describe()}\n"
+
+    outliers = {}
+    
+    for col in numerical_cols:
+        z_scores = (data[col] - data[col].mean()) / data[col].std()
+        threshold = 3
+        outliers[col] = len(data[z_scores.abs() > threshold][col].tolist())
+    stats += f"Number of outliers in each column:\n{outliers}\n"
+
+    for num_col in numerical_cols:
+        for Num_col in numerical_cols:
+            if num_col != Num_col:
+                stats += f"- Correlation between {num_col} and {Num_col}: {numerical_data[num_col].corr(numerical_data[Num_col])}\n"
+    
+    
+    return stats
 
 def plot_visualizations(data):
     """
@@ -217,6 +155,7 @@ def write_report(stats):
         file.write(f"Analysis performed on {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n")
         file.write("## General Statistics\n")
         file.write(stats)
+    file.close()
 
 def analyze_data(data):
 
@@ -275,7 +214,7 @@ def generate_story(data_analysis, df):
                 "properties": {
                     "data_analysis": {
                         "type": "string",
-                        "description": "Summary of key insights from the data analysis findings."
+                        "description": "Summary of the analysis findings."
                     }
                 }
             }
@@ -296,7 +235,7 @@ def generate_story(data_analysis, df):
                     with clear, insightful subheadings highlighting key trends and insights. Structure the story well."""
             }
         ],
-        "max_tokens": 400,
+        "max_tokens": 500,
         "functions": function_descriptions,
         "function_call": {"name": "generate_story", "arguments": {"data_analysis": data_analysis}}
     }
