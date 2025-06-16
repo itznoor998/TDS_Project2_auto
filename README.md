@@ -2,6 +2,7 @@
 # Autolysis 🧠📊
 
 **Autolysis** is a Python-based automated data analysis tool designed to generate comprehensive statistical summaries, visualizations, and narrative reports from CSV datasets. It is built for data analysts, students, and professionals who want quick insights without manual scripting.
+I have given three dataset in the `data` folder and their corresponding analysis results are in their respective folders ( `goodreads`, `happiness`, `media`).
 
 ---
 
